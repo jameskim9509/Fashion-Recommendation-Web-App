@@ -23,6 +23,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
+import { useNavigate } from "react-router";
 import {
   fashionApi,
   FashionItem,
@@ -56,9 +57,6 @@ interface CurrentWeather {
   fetchedAt: Date;
 }
 
-interface DashboardProps {
-  onNavigateToAdmin: () => void;
-}
 
 // ─────────────────────────────────────────────────────────
 // 날씨 mock 서비스 (추후 실제 API 교체)
@@ -354,9 +352,8 @@ function FashionCard({ item }: { item: FashionItem }) {
 // ─────────────────────────────────────────────────────────
 // 메인 대시보드
 // ─────────────────────────────────────────────────────────
-export default function Dashboard({
-  onNavigateToAdmin,
-}: DashboardProps) {
+export default function Dashboard() {
+  const navigate = useNavigate();
   const [currentWeather, setCurrentWeather] =
     useState<CurrentWeather | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(true);
@@ -467,7 +464,7 @@ export default function Dashboard({
           </div>
 
           <button
-            onClick={onNavigateToAdmin}
+            onClick={() => navigate('/admin')}
             className="flex items-center gap-2 px-4 py-2 bg-white rounded-xl shadow hover:shadow-lg transition-shadow border border-gray-200"
           >
             <Settings className="w-5 h-5" />
