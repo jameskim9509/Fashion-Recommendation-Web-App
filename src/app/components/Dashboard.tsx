@@ -199,7 +199,9 @@ function getTempBand(temp: number): TempBand {
 // 패션 데이터의 숫자 기온 추출
 // ─────────────────────────────────────────────────────────
 function getItemTemperature(item: FashionItem): number | null {
-  const candidates = [
+  // FashionItem 타입상 number | undefined지만, OpenAPI spec(NullableNumberLike)에
+  // 따르면 API가 빈 문자열 ""을 반환할 수 있으므로 unknown으로 다뤄 런타임 가드한다.
+  const candidates: unknown[] = [
     item.temperature_avg_c,
     item.temperature_feels_like_c,
     item.temperature_max_c,
@@ -269,14 +271,19 @@ function FashionCard({ item }: { item: FashionItem }) {
             {catKey}
           </span>
 
-          {/* 기온 구간: temperature_band 컬럼이 아니라 숫자 기온으로 계산 */}
-          {tempBand && (
+          {/* 기온 구간: temperature_band 컬럼이 아니라 숫자 기온으로 계산.
+              기온 정보가 전혀 없으면 "기온 무관" 뱃지로 표시한다. */}
+          {tempBand ? (
             <span
               className={`px-2.5 py-0.5 rounded-full text-xs ${tempBandConfig[tempBand].color}`}
             >
               {itemTemperature !== null
                 ? `기준 ${itemTemperature}°C`
                 : ""}
+            </span>
+          ) : (
+            <span className="px-2.5 py-0.5 rounded-full text-xs bg-gray-100 text-gray-500">
+              기온 무관
             </span>
           )}
         </div>
@@ -427,11 +434,10 @@ export default function Dashboard() {
     return allFashionItems.filter((item) => {
       const itemBand = getItemTempBand(item);
 
-      if (!itemBand) {
-        return false;
-      }
-
-      const bandMatch = itemBand === currentWeatherBand;
+      // 기온 정보가 없는 아이템은 band 매칭을 건너뛰고 통과시킨다
+      // (이전에는 silently drop 되었음). 카드에서는 "기온 무관" 뱃지로 표시한다.
+      const bandMatch =
+        itemBand === null || itemBand === currentWeatherBand;
       const genderMatch = item.gender === selectedGender;
 
       return bandMatch && genderMatch;
@@ -718,11 +724,6 @@ export default function Dashboard() {
                   {genderLabel[selectedGender]}
                 </strong>{" "}
                 조건에 해당하는 데이터를 추가해보세요.
-              </p>
-              <p className="text-xs text-gray-400 mt-2">
-                스프레드시트의 temperature_avg_c,
-                temperature_feels_like_c, temperature_max_c,
-                temperature_min_c 중 하나가 있어야 매칭됩니다.
               </p>
             </div>
           ) : (
