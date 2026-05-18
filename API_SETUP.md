@@ -4,11 +4,11 @@
 
 ## 1. Google Apps Script 설정
 
-### 1-1. Apps Script 프로�ェ트 생성
+### 1-1. Apps Script 프로젝트 열기
 
-1. Google Drive에서 새 Apps Script 프로젝트 생성
-2. `src/imports/pasted_text/fashion-api.txt` 파일의 코드를 복사하여 붙여넣기
-3. 저장 (Ctrl+S 또는 Cmd+S)
+1. 아래 Apps Script 프로젝트로 이동 (서버 코드 원본 위치):
+   https://script.google.com/u/0/home/projects/11MzB0opiGkHBdjx5OLtAqL4EMkV31u2tOZqGEbX1r9Ap4Lnkv-elzzax/edit
+2. 자체 환경에 사본이 필요하면 코드를 복사해 새 Apps Script 프로젝트에 붙여넣고 저장 (Ctrl+S 또는 Cmd+S)
 
 ### 1-2. 초기 설정 실행
 
