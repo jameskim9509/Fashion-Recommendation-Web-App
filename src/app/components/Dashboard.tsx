@@ -28,17 +28,15 @@ import {
   fashionApi,
   FashionItem,
 } from "../services/fashionApi";
+import {
+  fetchCurrentWeather,
+  type CurrentWeather,
+  type WeatherType,
+} from "../services/weatherApi";
 
 // ─────────────────────────────────────────────────────────
 // 타입
 // ─────────────────────────────────────────────────────────
-type WeatherType =
-  | "sunny"
-  | "cloudy"
-  | "rainy"
-  | "snowy"
-  | "windy"
-  | "foggy";
 type GenderType = "male" | "female" | "unisex";
 type TempBand =
   | "freezing"
@@ -48,31 +46,6 @@ type TempBand =
   | "warm"
   | "hot";
 
-interface CurrentWeather {
-  weather: WeatherType;
-  temperature: number;
-  feelsLike: number;
-  humidity: number;
-  location: string;
-  fetchedAt: Date;
-}
-
-
-// ─────────────────────────────────────────────────────────
-// 날씨 mock 서비스 (추후 실제 API 교체)
-// ─────────────────────────────────────────────────────────
-const fetchCurrentWeather =
-  async (): Promise<CurrentWeather> => {
-    await new Promise((r) => setTimeout(r, 600));
-    return {
-      weather: "sunny",
-      temperature: 26,
-      feelsLike: 28,
-      humidity: 45,
-      location: "서울",
-      fetchedAt: new Date(),
-    };
-  };
 
 // ─────────────────────────────────────────────────────────
 // 상수
@@ -388,6 +361,9 @@ export default function Dashboard() {
     try {
       const w = await fetchCurrentWeather();
       setCurrentWeather(w);
+    } catch (error) {
+      console.error("Failed to load weather:", error);
+      setCurrentWeather(null);
     } finally {
       setWeatherLoading(false);
     }
