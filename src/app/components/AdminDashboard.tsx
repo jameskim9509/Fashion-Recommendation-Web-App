@@ -13,6 +13,15 @@ import {
   FashionItem,
 } from "../services/fashionApi";
 
+/**
+ * API의 NullableNumberLike: number | "" | undefined | null을 안전하게 체크.
+ * FashionItem 타입은 number | undefined이지만 OpenAPI spec에 따라 런타임은
+ * 빈 문자열을 반환할 수 있다.
+ */
+function hasValue(value: unknown): boolean {
+  return value !== undefined && value !== null && value !== "";
+}
+
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const [items, setItems] = useState<FashionItem[]>([]);
@@ -569,9 +578,7 @@ export default function AdminDashboard() {
                       </td>
 
                       <td className="px-4 py-3 text-sm">
-                        {item.temperature_avg_c !== undefined &&
-                        item.temperature_avg_c !== null &&
-                        item.temperature_avg_c !== ""
+                        {hasValue(item.temperature_avg_c)
                           ? `${item.temperature_avg_c}°C`
                           : "-"}
                       </td>
