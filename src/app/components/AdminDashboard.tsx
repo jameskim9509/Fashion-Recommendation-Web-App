@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router";
 import {
   ArrowLeft,
   Plus,
@@ -12,13 +13,8 @@ import {
   FashionItem,
 } from "../services/fashionApi";
 
-interface AdminDashboardProps {
-  onNavigateBack: () => void;
-}
-
-export default function AdminDashboard({
-  onNavigateBack,
-}: AdminDashboardProps) {
+export default function AdminDashboard() {
+  const navigate = useNavigate();
   const [items, setItems] = useState<FashionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingItem, setEditingItem] =
@@ -117,7 +113,7 @@ export default function AdminDashboard({
         <header className="flex justify-between items-center mb-8">
           <div className="flex items-center gap-4">
             <button
-              onClick={onNavigateBack}
+              onClick={() => navigate('/')}
               className="p-2 hover:bg-white rounded-xl transition-colors"
             >
               <ArrowLeft className="w-6 h-6" />
