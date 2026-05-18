@@ -1,0 +1,852 @@
+openapi: 3.1.0
+
+info:
+  title: Figma Fashion Data API
+  version: 1.0.0
+  description: |
+    Google Apps Script Web App 기반 Fashion Data API입니다.
+
+    - Google Spreadsheet를 데이터 저장소로 사용합니다.
+    - Apps Script Web App URL의 `/exec` 엔드포인트로 호출합니다.
+    - GET 요청은 `action` query parameter로 라우팅됩니다.
+    - POST 요청은 JSON body의 `action` 값으로 라우팅됩니다.
+    - 쓰기 요청은 body의 `token` 값으로 인증합니다.
+    - `temperature_band`는 더 이상 저장/응답/검증하지 않습니다.
+    - 기온 구간 계산은 프론트엔드에서 `temperature_avg_c` 등을 기준으로 수행합니다.
+
+servers:
+  - url: https://script.google.com/macros/s/{deploymentId}
+    description: Google Apps Script Web App URL
+    variables:
+      deploymentId:
+        default: YOUR_DEPLOYMENT_ID
+        description: Apps Script Web App deployment ID
+
+tags:
+  - name: System
+    description: 상태 확인, 스키마, 연결 정보 조회
+  - name: FashionData
+    description: 패션 데이터 조회 및 변경
+
+paths:
+  /exec:
+    get:
+      tags:
+        - System
+        - FashionData
+      summary: GET action 기반 Fashion Data API
+      description: |
+        `action` query parameter에 따라 health, schema, connection, list, get 기능을 수행합니다.
+
+        `action`을 생략하면 기본적으로 `list`로 처리됩니다.
+      operationId: getFashionData
+      parameters:
+        - name: action
+          in: query
+          required: false
+          description: 수행할 GET action입니다. 생략 시 `list`로 처리됩니다.
+          schema:
+            type: string
+            default: list
+            enum:
+              - health
+              - schema
+              - connection
+              - list
+              - get
+
+        - name: token
+          in: query
+          required: false
+          description: |
+            읽기 인증을 활성화한 경우 사용하는 token입니다.
+            현재 코드의 기본 설정에서는 `requireTokenForRead: false`입니다.
+          schema:
+            type: string
+
+        - name: id
+          in: query
+          required: false
+          description: |
+            `action=get`일 때 조회할 데이터 ID입니다.
+            `action=list`에서도 ID 필터로 사용할 수 있습니다.
+          schema:
+            type: string
+            example: LOOK_001
+
+        - name: weather
+          in: query
+          required: false
+          description: 날씨 필터입니다.
+          schema:
+            $ref: "#/components/schemas/Weather"
+
+        - name: gender
+          in: query
+          required: false
+          description: 성별 필터입니다.
+          schema:
+            $ref: "#/components/schemas/Gender"
+
+        - name: fashion_category
+          in: query
+          required: false
+          description: 패션 카테고리 필터입니다.
+          schema:
+            $ref: "#/components/schemas/FashionCategory"
+
+        - name: include_inactive
+          in: query
+          required: false
+          description: |
+            true이면 `active=false` 데이터도 포함합니다.
+            기본값은 false입니다.
+          schema:
+            type: boolean
+            default: false
+
+        - name: limit
+          in: query
+          required: false
+          description: 반환할 최대 데이터 개수입니다.
+          schema:
+            type: integer
+            minimum: 1
+            example: 10
+
+      responses:
+        "200":
+          description: |
+            Apps Script Web App 응답입니다.
+            성공/실패 여부는 HTTP status가 아니라 JSON body의 `success` 필드로 판단합니다.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/HealthResponse"
+                  - $ref: "#/components/schemas/SchemaResponse"
+                  - $ref: "#/components/schemas/ConnectionResponse"
+                  - $ref: "#/components/schemas/ListFashionItemsResponse"
+                  - $ref: "#/components/schemas/GetFashionItemResponse"
+                  - $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                health:
+                  summary: Health check response
+                  value:
+                    success: true
+                    message: Fashion API is running
+                    timestamp: "2026-05-18T10:00:00.000Z"
+
+                schema:
+                  summary: Schema response
+                  value:
+                    success: true
+                    sheetName: fashion_data
+                    headers:
+                      - id
+                      - weather
+                      - temperature_min_c
+                      - temperature_max_c
+                      - temperature_avg_c
+                      - temperature_feels_like_c
+                      - gender
+                      - fashion_category
+                      - outer
+                      - top
+                      - bottom
+                      - shoes
+                      - accessory
+                      - color_palette
+                      - material
+                      - description
+                      - image_prompt
+                      - figma_layer_name
+                      - active
+                      - updated_at
+                    options:
+                      weather:
+                        - sunny
+                        - cloudy
+                        - rainy
+                        - snowy
+                        - windy
+                        - foggy
+                      gender:
+                        - male
+                        - female
+                        - unisex
+                      fashion_category:
+                        - casual
+                        - street
+                        - minimal
+                        - formal
+                        - sporty
+                        - business
+                        - date
+                        - travel
+
+                list:
+                  summary: List response
+                  value:
+                    success: true
+                    count: 1
+                    data:
+                      - id: LOOK_001
+                        weather: sunny
+                        temperature_min_c: 23
+                        temperature_max_c: 30
+                        temperature_avg_c: 27
+                        temperature_feels_like_c: 29
+                        gender: female
+                        fashion_category: casual
+                        outer: ""
+                        top: white linen shirt
+                        bottom: beige shorts
+                        shoes: white sneakers
+                        accessory: canvas tote bag
+                        color_palette: white, beige
+                        material: linen, cotton
+                        description: Sunny casual summer outfit
+                        image_prompt: Create a summer casual outfit...
+                        figma_layer_name: sunny_female_casual_001
+                        active: true
+                        updated_at: "2026-05-18T10:00:00.000Z"
+
+                error:
+                  summary: Error response
+                  value:
+                    success: false
+                    error: "id 파라미터가 필요합니다."
+
+    post:
+      tags:
+        - FashionData
+      summary: POST action 기반 Fashion Data 변경 API
+      description: |
+        JSON body의 `action` 값에 따라 add, update, upsert, delete, deactivate를 수행합니다.
+
+        Apps Script Web App에서는 DELETE method 대신 POST body의 `action: delete` 방식을 사용합니다.
+
+        현재 구현에서는 쓰기 요청에 `token`이 필요합니다.
+      operationId: mutateFashionData
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: "#/components/schemas/AddFashionItemRequest"
+                - $ref: "#/components/schemas/UpdateFashionItemRequest"
+                - $ref: "#/components/schemas/UpsertFashionItemRequest"
+                - $ref: "#/components/schemas/DeleteFashionItemRequest"
+                - $ref: "#/components/schemas/DeactivateFashionItemRequest"
+            examples:
+              add:
+                summary: Add item
+                value:
+                  token: API_TOKEN
+                  action: add
+                  item:
+                    weather: sunny
+                    temperature_min_c: 23
+                    temperature_max_c: 30
+                    temperature_avg_c: 27
+                    temperature_feels_like_c: 29
+                    gender: female
+                    fashion_category: casual
+                    top: white linen shirt
+                    bottom: beige shorts
+                    shoes: white sneakers
+                    image_prompt: Create a summer casual outfit...
+
+              update:
+                summary: Update item
+                value:
+                  token: API_TOKEN
+                  action: update
+                  item:
+                    id: LOOK_001
+                    top: white linen shirt
+                    bottom: beige shorts
+                    active: true
+
+              upsert:
+                summary: Upsert item
+                value:
+                  token: API_TOKEN
+                  action: upsert
+                  item:
+                    id: LOOK_004
+                    weather: sunny
+                    temperature_avg_c: 27
+                    gender: female
+                    fashion_category: casual
+                    top: white linen shirt
+                    bottom: beige shorts
+                    image_prompt: Create a summer casual outfit...
+
+              delete:
+                summary: Delete item
+                value:
+                  token: API_TOKEN
+                  action: delete
+                  id: LOOK_001
+
+              deactivate:
+                summary: Deactivate item
+                value:
+                  token: API_TOKEN
+                  action: deactivate
+                  id: LOOK_001
+
+      responses:
+        "200":
+          description: |
+            Apps Script Web App 응답입니다.
+            성공/실패 여부는 HTTP status가 아니라 JSON body의 `success` 필드로 판단합니다.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/MutateFashionItemResponse"
+                  - $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                addSuccess:
+                  summary: Add success
+                  value:
+                    success: true
+                    action: add
+                    data:
+                      id: LOOK_AB12CD34
+                      weather: sunny
+                      temperature_avg_c: 27
+                      gender: female
+                      fashion_category: casual
+                      top: white linen shirt
+                      bottom: beige shorts
+                      active: true
+                      updated_at: "2026-05-18T10:00:00.000Z"
+
+                updateSuccess:
+                  summary: Update success
+                  value:
+                    success: true
+                    action: update
+                    data:
+                      id: LOOK_001
+                      weather: sunny
+                      gender: female
+                      fashion_category: casual
+                      top: white linen shirt
+                      bottom: beige shorts
+                      active: true
+                      updated_at: "2026-05-18T10:00:00.000Z"
+
+                deleteSuccess:
+                  summary: Delete success
+                  value:
+                    success: true
+                    action: delete
+                    data:
+                      id: LOOK_001
+                      weather: sunny
+                      gender: female
+                      fashion_category: casual
+                      active: true
+
+                error:
+                  summary: Error response
+                  value:
+                    success: false
+                    error: "유효하지 않은 API token입니다."
+
+components:
+  schemas:
+    Weather:
+      type: string
+      enum:
+        - sunny
+        - cloudy
+        - rainy
+        - snowy
+        - windy
+        - foggy
+      example: sunny
+
+    Gender:
+      type: string
+      enum:
+        - male
+        - female
+        - unisex
+      example: female
+
+    FashionCategory:
+      type: string
+      enum:
+        - casual
+        - street
+        - minimal
+        - formal
+        - sporty
+        - business
+        - date
+        - travel
+      example: casual
+
+    EmptyString:
+      type: string
+      enum:
+        - ""
+
+    NullableNumberLike:
+      description: |
+        Apps Script 코드에서 숫자 변환 실패 또는 빈 값은 빈 문자열로 저장/응답될 수 있습니다.
+      oneOf:
+        - type: number
+        - $ref: "#/components/schemas/EmptyString"
+
+    BooleanLike:
+      description: |
+        Google Sheet 체크박스 값 또는 빈 셀을 고려한 boolean-like 값입니다.
+      oneOf:
+        - type: boolean
+        - $ref: "#/components/schemas/EmptyString"
+
+    FashionItem:
+      type: object
+      description: |
+        패션 코디 데이터입니다.
+        `temperature_band`는 API 응답 필드에 포함되지 않습니다.
+      properties:
+        id:
+          type: string
+          description: 데이터 ID입니다.
+          example: LOOK_001
+
+        weather:
+          $ref: "#/components/schemas/Weather"
+
+        temperature_min_c:
+          $ref: "#/components/schemas/NullableNumberLike"
+
+        temperature_max_c:
+          $ref: "#/components/schemas/NullableNumberLike"
+
+        temperature_avg_c:
+          $ref: "#/components/schemas/NullableNumberLike"
+
+        temperature_feels_like_c:
+          $ref: "#/components/schemas/NullableNumberLike"
+
+        gender:
+          $ref: "#/components/schemas/Gender"
+
+        fashion_category:
+          $ref: "#/components/schemas/FashionCategory"
+
+        outer:
+          type: string
+          example: light cardigan
+
+        top:
+          type: string
+          example: white linen shirt
+
+        bottom:
+          type: string
+          example: beige shorts
+
+        shoes:
+          type: string
+          example: white sneakers
+
+        accessory:
+          type: string
+          example: canvas tote bag
+
+        color_palette:
+          type: string
+          example: white, beige
+
+        material:
+          type: string
+          example: linen, cotton
+
+        description:
+          type: string
+          example: Sunny casual summer outfit
+
+        image_prompt:
+          type: string
+          example: Create a summer casual outfit...
+
+        figma_layer_name:
+          type: string
+          example: sunny_female_casual_001
+
+        active:
+          $ref: "#/components/schemas/BooleanLike"
+
+        updated_at:
+          type: string
+          format: date-time
+          example: "2026-05-18T10:00:00.000Z"
+
+    FashionItemInput:
+      type: object
+      description: |
+        생성/수정 요청용 패션 데이터입니다.
+
+        서버는 입력값을 정규화합니다.
+        - weather, gender, fashion_category는 trim 후 lowercase 처리됩니다.
+        - temperature_* 값은 number로 변환됩니다.
+        - active가 없으면 true로 처리됩니다.
+        - temperature_band가 들어와도 저장/응답/검증하지 않고 제거됩니다.
+      properties:
+        id:
+          type: string
+          description: |
+            데이터 ID입니다.
+            add/upsert에서 생략하면 `LOOK_XXXXXXXX` 형식으로 자동 생성됩니다.
+          example: LOOK_001
+
+        weather:
+          $ref: "#/components/schemas/Weather"
+
+        temperature_min_c:
+          oneOf:
+            - type: number
+            - type: string
+          example: 23
+
+        temperature_max_c:
+          oneOf:
+            - type: number
+            - type: string
+          example: 30
+
+        temperature_avg_c:
+          oneOf:
+            - type: number
+            - type: string
+          example: 27
+
+        temperature_feels_like_c:
+          oneOf:
+            - type: number
+            - type: string
+          example: 29
+
+        gender:
+          $ref: "#/components/schemas/Gender"
+
+        fashion_category:
+          $ref: "#/components/schemas/FashionCategory"
+
+        outer:
+          type: string
+          example: ""
+
+        top:
+          type: string
+          example: white linen shirt
+
+        bottom:
+          type: string
+          example: beige shorts
+
+        shoes:
+          type: string
+          example: white sneakers
+
+        accessory:
+          type: string
+          example: canvas tote bag
+
+        color_palette:
+          type: string
+          example: white, beige
+
+        material:
+          type: string
+          example: linen, cotton
+
+        description:
+          type: string
+          example: Sunny casual summer outfit
+
+        image_prompt:
+          type: string
+          example: Create a summer casual outfit...
+
+        figma_layer_name:
+          type: string
+          example: sunny_female_casual_001
+
+        active:
+          oneOf:
+            - type: boolean
+            - type: string
+          example: true
+
+    AddFashionItemRequest:
+      type: object
+      required:
+        - token
+        - action
+        - item
+      properties:
+        token:
+          type: string
+          description: Script Properties에 저장된 API_TOKEN입니다.
+          example: API_TOKEN
+        action:
+          type: string
+          const: add
+        item:
+          allOf:
+            - $ref: "#/components/schemas/FashionItemInput"
+          required:
+            - weather
+            - gender
+
+    UpdateFashionItemRequest:
+      type: object
+      required:
+        - token
+        - action
+        - item
+      properties:
+        token:
+          type: string
+          example: API_TOKEN
+        action:
+          type: string
+          const: update
+        item:
+          allOf:
+            - $ref: "#/components/schemas/FashionItemInput"
+          required:
+            - id
+
+    UpsertFashionItemRequest:
+      type: object
+      required:
+        - token
+        - action
+        - item
+      properties:
+        token:
+          type: string
+          example: API_TOKEN
+        action:
+          type: string
+          const: upsert
+          description: |
+            생략 시에도 서버 기본값은 upsert입니다.
+            다만 명세 명확성을 위해 요청 예시에서는 명시합니다.
+        item:
+          allOf:
+            - $ref: "#/components/schemas/FashionItemInput"
+
+    DeleteFashionItemRequest:
+      type: object
+      required:
+        - token
+        - action
+        - id
+      properties:
+        token:
+          type: string
+          example: API_TOKEN
+        action:
+          type: string
+          const: delete
+        id:
+          type: string
+          example: LOOK_001
+
+    DeactivateFashionItemRequest:
+      type: object
+      required:
+        - token
+        - action
+        - id
+      properties:
+        token:
+          type: string
+          example: API_TOKEN
+        action:
+          type: string
+          const: deactivate
+        id:
+          type: string
+          example: LOOK_001
+
+    HealthResponse:
+      type: object
+      required:
+        - success
+        - message
+        - timestamp
+      properties:
+        success:
+          type: boolean
+          const: true
+        message:
+          type: string
+          example: Fashion API is running
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-05-18T10:00:00.000Z"
+
+    SchemaResponse:
+      type: object
+      required:
+        - success
+        - sheetName
+        - headers
+        - options
+      properties:
+        success:
+          type: boolean
+          const: true
+        sheetName:
+          type: string
+          example: fashion_data
+        headers:
+          type: array
+          items:
+            type: string
+          example:
+            - id
+            - weather
+            - temperature_min_c
+            - temperature_max_c
+            - temperature_avg_c
+            - temperature_feels_like_c
+            - gender
+            - fashion_category
+            - outer
+            - top
+            - bottom
+            - shoes
+            - accessory
+            - color_palette
+            - material
+            - description
+            - image_prompt
+            - figma_layer_name
+            - active
+            - updated_at
+        options:
+          type: object
+          required:
+            - weather
+            - gender
+            - fashion_category
+          properties:
+            weather:
+              type: array
+              items:
+                $ref: "#/components/schemas/Weather"
+            gender:
+              type: array
+              items:
+                $ref: "#/components/schemas/Gender"
+            fashion_category:
+              type: array
+              items:
+                $ref: "#/components/schemas/FashionCategory"
+
+    ConnectionResponse:
+      type: object
+      required:
+        - connected
+        - spreadsheetId
+        - spreadsheetUrl
+        - sheetName
+        - sheetExists
+      properties:
+        connected:
+          type: boolean
+          example: true
+        spreadsheetId:
+          type: string
+          example: 1AbCdEfGhIjKlMnOpQrStUvWxYz
+        spreadsheetUrl:
+          type: string
+          format: uri
+          example: https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKlMnOpQrStUvWxYz/edit
+        sheetName:
+          type: string
+          example: fashion_data
+        sheetExists:
+          type: boolean
+          example: true
+
+    ListFashionItemsResponse:
+      type: object
+      required:
+        - success
+        - count
+        - data
+      properties:
+        success:
+          type: boolean
+          const: true
+        count:
+          type: integer
+          minimum: 0
+          example: 1
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/FashionItem"
+
+    GetFashionItemResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+          const: true
+        data:
+          $ref: "#/components/schemas/FashionItem"
+
+    MutateFashionItemResponse:
+      type: object
+      required:
+        - success
+        - action
+        - data
+      properties:
+        success:
+          type: boolean
+          const: true
+        action:
+          type: string
+          enum:
+            - add
+            - update
+            - delete
+            - deactivate
+        data:
+          $ref: "#/components/schemas/FashionItem"
+
+    ErrorResponse:
+      type: object
+      required:
+        - success
+        - error
+      properties:
+        success:
+          type: boolean
+          const: false
+        error:
+          type: string
+          example: 유효하지 않은 API token입니다.

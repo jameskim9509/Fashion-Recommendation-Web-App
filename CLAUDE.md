@@ -18,7 +18,9 @@ This is a Figma Make export — a React 18 + Vite + TypeScript SPA for weather-b
 [src/app/App.tsx](src/app/App.tsx) uses a `useState` page switch between `Dashboard` and `AdminDashboard` — there is no router despite `react-router` being in dependencies. Navigation flows through `onNavigateToAdmin` / `onNavigateBack` props.
 
 ### Data layer (Google Apps Script + Sheets)
-The "backend" is a Google Apps Script Web App backed by a Google Sheet, accessed through [src/app/services/fashionApi.ts](src/app/services/fashionApi.ts). `API_BASE_URL` and `API_TOKEN` are hard-coded at the top of that file — updating either means editing the constants. See [API_SETUP.md](API_SETUP.md) for Apps Script deployment, token generation (`setApiToken()`), and the JSON request shape for upsert/delete.
+The "backend" is a Google Apps Script Web App backed by a Google Sheet, accessed through [src/app/services/fashionApi.ts](src/app/services/fashionApi.ts). `API_BASE_URL` and `API_TOKEN` are hard-coded at the top of that file — updating either means editing the constants. See [API_SETUP.md](API_SETUP.md) for Apps Script deployment and token generation (`setApiToken()`).
+
+The authoritative API contract — every `action`, request/response schema, and the `NullableNumberLike`/`BooleanLike` quirks of Sheet-backed values — lives in [openapi.yaml](openapi.yaml) (OpenAPI 3.1). If `fashionApi.ts` and `openapi.yaml` disagree, fix whichever side is behind; do not silently diverge. Note that `temperature_band` is intentionally absent from the spec — it is no longer stored/validated server-side, and the client computes bands from `temperature_*_c` (see filter pipeline below).
 
 POST requests use `Content-Type: text/plain;charset=UTF-8` deliberately — this avoids CORS preflight against Apps Script. Don't "fix" it to `application/json`. All fetches use `redirect: "follow"` because Apps Script `/exec` endpoints redirect to `googleusercontent.com`.
 
@@ -46,10 +48,9 @@ If you change band thresholds, update both `getTempBand` and `tempBandConfig` (d
 The React + Tailwind plugin pair is required by Figma Make tooling even if Tailwind isn't actively used — don't remove either.
 
 ## Required sheet field values
-When working with fashion items, these fields have constrained vocabularies (enforced by `FashionItem` type and used as filter keys):
+When working with fashion items, these fields have constrained vocabularies (enforced by `FashionItem` type, the OpenAPI `enum`s, and used as filter keys):
 - `weather`: `sunny | cloudy | rainy | snowy | windy | foggy`
 - `gender`: `male | female | unisex`
 - `fashion_category`: `casual | street | minimal | formal | sporty | business | date | travel`
-- `temperature_band` (stored but **unused by client filtering** — see above): `freezing | cold | cool | mild | warm | hot`
 
-`active: false` items are excluded after fetch.
+`temperature_band` is **not** persisted server-side (the Apps Script strips it on input per [openapi.yaml](openapi.yaml) `FashionItemInput`); the client-side `TempBand` is derived from `temperature_*_c`. `active: false` items are excluded after fetch.
