@@ -45,6 +45,23 @@ export interface ApiResponse<T> {
   error?: string;
 }
 
+/**
+ * Google Apps Script Web App 호출 시 두 가지 비표준 설정을 사용합니다.
+ * 두 설정 모두 **의도된 동작**이며 바꾸면 앱이 즉시 깨집니다.
+ *
+ * 1) POST의 Content-Type은 반드시 `text/plain`입니다.
+ *    `application/json`으로 바꾸면 브라우저가 CORS preflight(OPTIONS)
+ *    요청을 먼저 보내는데, Apps Script Web App은 OPTIONS를 처리하지
+ *    못해 본 요청이 통째로 실패합니다. body는 그대로 JSON 문자열이며
+ *    서버는 `JSON.parse(e.postData.contents)`로 직접 파싱합니다.
+ *    (cf. OpenAPI spec `application/json` 표기는 body 포맷을 의미하는
+ *     것이며 실제 Content-Type 헤더와 일치할 필요는 없습니다.)
+ *
+ * 2) 모든 fetch 호출에 `redirect: "follow"`를 명시합니다.
+ *    Apps Script `/exec`는 항상 302로 `googleusercontent.com`로
+ *    리다이렉트되며, `follow`는 fetch 기본값이지만 디버깅 목적의
+ *    `manual` 변경으로 인한 회귀를 막기 위해 일관되게 명시합니다.
+ */
 class FashionApiService {
   private baseUrl: string;
   private token: string;
