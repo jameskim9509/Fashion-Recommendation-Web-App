@@ -5,25 +5,44 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 - `npm i` — install dependencies (pnpm-workspace.yaml is also present; either works, repo declares itself as a single-package workspace).
-- `npm run dev` — start the Vite dev server.
-- `npm run build` — production build via `vite build`.
+- `npm run dev` — start the Next.js dev server.
+- `npm run build` — production build via `next build`.
+- `npm run start` — serve the production build via `next start`.
 - `npm run typecheck` — TypeScript strict-mode check via `tsc --noEmit` (uses [tsconfig.json](tsconfig.json)).
 
 No lint or test scripts are configured.
 
 ## Architecture
 
-This is a Figma Make export — a React 18 + Vite + TypeScript SPA for weather-based fashion recommendations. UI strings are Korean.
+A **Next.js 15 (App Router) + React 18 + TypeScript** full-stack app for weather-based fashion recommendations. UI strings are Korean. Originally a Figma Make Vite export; migrated to Next.js (see umbrella issue #15). Vite/`figma:asset` plumbing has been removed from the runtime — only a few dead config files (`vite.config.ts`, `index.html`, `src/vite-env.d.ts`, `@vitejs/plugin-react`, `@tailwindcss/vite`) remain pending the final cleanup PR (`chore/remove-vite-figma`); do not add new code that depends on them.
 
 ### Page routing
-[src/app/App.tsx](src/app/App.tsx) uses `react-router` v7's `BrowserRouter` + `Routes`: `/` → Dashboard, `/admin` → AdminDashboard, unmatched paths redirect to `/`. Both child components use `useNavigate()` directly — no callback prop drilling.
+App Router lives in [app/](app/):
+- [app/page.tsx](app/page.tsx) → renders `<Dashboard />`
+- [app/admin/page.tsx](app/admin/page.tsx) → renders `<AdminDashboard />`
+- [app/layout.tsx](app/layout.tsx) is the root layout (imports `@/styles/index.css`)
 
-### Data layer (Google Apps Script + Sheets)
-The "backend" is a Google Apps Script Web App backed by a Google Sheet, accessed through [src/app/services/fashionApi.ts](src/app/services/fashionApi.ts). `API_BASE_URL` and `API_TOKEN` are **hard-coded** at the top of that file — there is no env var pipeline (no `.env`, no `import.meta.env.VITE_*` usage anywhere in the repo). Updating either means editing the constants. See [API_SETUP.md](API_SETUP.md) for Apps Script deployment and token generation (`setApiToken()`).
+`Dashboard` and `AdminDashboard` are **Client Components** (`"use client"` at the top of [src/app/components/Dashboard.tsx](src/app/components/Dashboard.tsx) and [src/app/components/AdminDashboard.tsx](src/app/components/AdminDashboard.tsx)) and use `useRouter()` from `next/navigation` — no callback prop drilling. SSR of initial data is planned in a follow-up PR (`feat/nextjs-ssr-dashboard`).
 
-The authoritative API contract — every `action`, request/response schema, and the `NullableNumberLike`/`BooleanLike` quirks of Sheet-backed values — lives in [openapi.yaml](openapi.yaml) (OpenAPI 3.1). If `fashionApi.ts` and `openapi.yaml` disagree, fix whichever side is behind; do not silently diverge. Note that `temperature_band` is intentionally absent from the spec — it is no longer stored/validated server-side, and the client computes bands from `temperature_*_c` (see filter pipeline below).
+### Data layer (Next.js Route Handler proxy → Google Apps Script + Sheets)
+Browser code calls **same-origin `/api/fashion`** ([app/api/fashion/route.ts](app/api/fashion/route.ts)), which proxies to the Apps Script `/exec` Web App. The Apps Script URL and token live **only on the server** as env vars:
 
-POST requests use `Content-Type: text/plain;charset=UTF-8` deliberately — this avoids CORS preflight against Apps Script. Don't "fix" it to `application/json`. All fetches use `redirect: "follow"` because Apps Script `/exec` endpoints redirect to `googleusercontent.com`.
+- `APPS_SCRIPT_URL` — Apps Script Web App `/exec` URL
+- `APPS_SCRIPT_TOKEN` — token expected by Apps Script `setApiToken()` (used to authenticate writes)
+
+See [.env.example](.env.example) for the local-dev template; copy to `.env.local` (gitignored). On Vercel, set the same vars in Project Settings. **Never** put either value in client code or prefix them with `NEXT_PUBLIC_` — the token would leak to the browser bundle.
+
+The client wrapper [src/app/services/fashionApi.ts](src/app/services/fashionApi.ts) only knows about `/api/fashion`:
+- `GET /api/fashion?weather=<w>` → list filtered by weather
+- `GET /api/fashion` → list all
+- `POST /api/fashion` (body = `Partial<FashionItem>`) → upsert
+- `DELETE /api/fashion?id=<id>` → delete
+
+The authoritative **upstream** API contract — every Apps Script `action`, request/response schema, and the `NullableNumberLike`/`BooleanLike` quirks of Sheet-backed values — lives in [openapi.yaml](openapi.yaml) (OpenAPI 3.1). If the Route Handler and `openapi.yaml` disagree about the upstream call shape, fix whichever side is behind; do not silently diverge. `temperature_band` is intentionally absent from the spec — it is no longer stored/validated server-side, and the client computes bands from `temperature_*_c` (see filter pipeline below).
+
+The Apps Script call has two non-negotiable quirks (in the Route Handler, **not** the client):
+1. POST `Content-Type` must be `text/plain;charset=UTF-8`. `application/json` triggers a CORS preflight that Apps Script can't handle. Body is still a JSON string; Apps Script does `JSON.parse(e.postData.contents)`.
+2. All fetches use `redirect: "follow"` because `/exec` always 302s to `googleusercontent.com`.
 
 ### Filter pipeline (non-obvious)
 [src/app/components/Dashboard.tsx](src/app/components/Dashboard.tsx) deliberately splits filtering between server and client:
@@ -37,16 +56,11 @@ If you change band thresholds, update both `getTempBand` and `tempBandConfig` (d
 
 ### UI stack
 - shadcn/ui components live in [src/app/components/ui/](src/app/components/ui/) (imported via the `cn()` helper in [ui/utils.ts](src/app/components/ui/utils.ts)).
-- Tailwind v4 is wired through `@tailwindcss/vite` — **do not add `tailwindcss` or `autoprefixer` to `postcss.config.mjs`** (the file documents this explicitly). Styles are entered via [src/styles/index.css](src/styles/index.css) which imports `fonts.css`, `tailwind.css`, and `theme.css`.
+- Tailwind v4 runs through `@tailwindcss/postcss` (registered in [postcss.config.mjs](postcss.config.mjs)); Next.js's build pipeline picks it up. Styles are entered via [src/styles/index.css](src/styles/index.css) (imported once from [app/layout.tsx](app/layout.tsx)), which `@import`s `fonts.css`, `tailwind.css`, and `theme.css`. The `@source` directive in `tailwind.css` scans **both** `src/` and `app/`.
 - Radix UI, MUI, and shadcn are all present. New UI work should prefer the existing shadcn primitives in `components/ui/` over adding new Radix/MUI usage.
 
-### Vite specifics
-[vite.config.ts](vite.config.ts) has two non-default behaviors:
-- A custom `figmaAssetResolver` plugin maps `figma:asset/<filename>` imports to `src/assets/<filename>`. The `figma:asset/*` module type is declared in [src/vite-env.d.ts](src/vite-env.d.ts).
-- `assetsInclude` is `['**/*.svg', '**/*.csv']` for raw imports — the inline comment explicitly forbids adding `.css`, `.tsx`, or `.ts` here.
-- Path alias `@` → `./src`.
-
-The React + Tailwind plugin pair is required by Figma Make tooling even if Tailwind isn't actively used — don't remove either.
+### Path alias
+`@/*` → `./src/*` (in [tsconfig.json](tsconfig.json)). Note this does NOT cover the root `app/` directory — import from `app/` using relative paths or full route paths.
 
 ## Required sheet field values
 When working with fashion items, these fields have constrained vocabularies (enforced by `FashionItem` type, the OpenAPI `enum`s, and used as filter keys):
