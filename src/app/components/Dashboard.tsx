@@ -5,6 +5,7 @@ import {
   useEffect,
   useCallback,
   useMemo,
+  useRef,
 } from "react";
 import {
   Sun,
@@ -334,17 +335,29 @@ function FashionCard({ item }: { item: FashionItem }) {
 // ─────────────────────────────────────────────────────────
 // 메인 대시보드
 // ─────────────────────────────────────────────────────────
-export default function Dashboard() {
+interface DashboardProps {
+  initialWeather?: CurrentWeather;
+  initialFashionItems?: FashionItem[];
+}
+
+export default function Dashboard({
+  initialWeather,
+  initialFashionItems,
+}: DashboardProps = {}) {
   const router = useRouter();
   const [currentWeather, setCurrentWeather] =
-    useState<CurrentWeather | null>(null);
-  const [weatherLoading, setWeatherLoading] = useState(true);
+    useState<CurrentWeather | null>(initialWeather ?? null);
+  const [weatherLoading, setWeatherLoading] = useState(!initialWeather);
   const [selectedGender, setSelectedGender] =
     useState<GenderType>("female");
-  const [allFashionItems, setAllFashionItems] = useState<
-    FashionItem[]
-  >([]);
+  const [allFashionItems, setAllFashionItems] = useState<FashionItem[]>(
+    (initialFashionItems ?? []).filter((i) => i.active !== false),
+  );
   const [fashionLoading, setFashionLoading] = useState(false);
+
+  // SSR seed 가 있으면 mount 시 첫 fashion fetch 를 한 번 건너뛴다 (중복 호출 방지).
+  // 이후 geolocation 으로 weather 가 변경되면 정상적으로 다시 fetch 한다.
+  const skipNextFashionLoad = useRef<boolean>(!!initialFashionItems);
 
   const genderOptions: {
     type: GenderType;
@@ -394,6 +407,10 @@ export default function Dashboard() {
   );
 
   useEffect(() => {
+    if (skipNextFashionLoad.current) {
+      skipNextFashionLoad.current = false;
+      return;
+    }
     if (currentWeather) {
       loadFashionList(currentWeather.weather);
     }
@@ -429,7 +446,7 @@ export default function Dashboard() {
     ? getTempBand(currentWeather.temperature)
     : "mild";
   const fetchedTime = currentWeather
-    ? currentWeather.fetchedAt.toLocaleTimeString("ko-KR", {
+    ? new Date(currentWeather.fetchedAt).toLocaleTimeString("ko-KR", {
         hour: "2-digit",
         minute: "2-digit",
       })
