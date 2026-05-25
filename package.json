@@ -55,6 +55,8 @@
     "motion": "12.23.24",
     "next": "^15.5.18",
     "next-themes": "0.4.6",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
     "react-day-picker": "8.10.1",
     "react-dnd": "16.0.1",
     "react-dnd-html5-backend": "16.0.1",
@@ -72,30 +74,10 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.0",
-    "@tailwindcss/vite": "4.1.12",
     "@types/node": "^22.10.5",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
-    "@vitejs/plugin-react": "4.7.0",
     "tailwindcss": "4.1.12",
-    "typescript": "^5.7.2",
-    "vite": "6.3.5"
-  },
-  "peerDependencies": {
-    "react": "18.3.1",
-    "react-dom": "18.3.1"
-  },
-  "peerDependenciesMeta": {
-    "react": {
-      "optional": true
-    },
-    "react-dom": {
-      "optional": true
-    }
-  },
-  "pnpm": {
-    "overrides": {
-      "vite": "6.3.5"
-    }
+    "typescript": "^5.7.2"
   }
 }

@@ -14,7 +14,7 @@ No lint or test scripts are configured.
 
 ## Architecture
 
-A **Next.js 15 (App Router) + React 18 + TypeScript** full-stack app for weather-based fashion recommendations. UI strings are Korean. Originally a Figma Make Vite export; migrated to Next.js (see umbrella issue #15). Vite/`figma:asset` plumbing has been removed from the runtime — only a few dead config files (`vite.config.ts`, `index.html`, `src/vite-env.d.ts`, `@vitejs/plugin-react`, `@tailwindcss/vite`) remain pending the final cleanup PR (`chore/remove-vite-figma`); do not add new code that depends on them.
+A **Next.js 15 (App Router) + React 18 + TypeScript** full-stack app for weather-based fashion recommendations. UI strings are Korean. Originally a Figma Make Vite export; the Vite/`figma:asset` stack has been fully removed (see umbrella issue #15).
 
 ### Page routing
 App Router lives in [app/](app/):

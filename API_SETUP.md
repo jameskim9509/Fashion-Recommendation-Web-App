@@ -39,12 +39,16 @@ setApiToken()
 
 ## 2. 앱에 API URL 설정
 
-`src/app/services/fashionApi.ts` 파일을 열어서:
+브라우저는 same-origin `/api/fashion` 만 호출하며, Apps Script URL/토큰은 **서버 환경 변수**로만 보관합니다 (`app/api/fashion/route.ts` 및 `src/lib/server/appsScript.ts` 에서 사용).
 
-```typescript
-const API_BASE_URL = 'YOUR_DEPLOYMENT_URL_HERE';  // 여기에 배포 URL 붙여넣기
-const API_TOKEN = '728185da-bc7f-476a-b3d4-c977556dcc8f';  // 생성된 토큰
+로컬 개발: 프로젝트 루트의 `.env.local` (gitignore 됨) 에 다음 두 값을 채웁니다 — 템플릿은 [.env.example](.env.example) 참고:
+
+```bash
+APPS_SCRIPT_URL=https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec
+APPS_SCRIPT_TOKEN=YOUR_GENERATED_TOKEN
 ```
+
+배포 (Vercel): Project Settings → Environment Variables 에 동일한 두 키를 등록합니다. `NEXT_PUBLIC_` 접두사를 절대 붙이지 마세요 — 토큰이 클라이언트 번들로 새어 나갑니다.
 
 ## 3. API 엔드포인트
 
