@@ -7,11 +7,9 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "vite build",
-    "dev": "vite",
-    "dev:next": "next dev",
-    "build:next": "next build",
-    "start:next": "next start",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
@@ -64,7 +62,6 @@
     "react-popper": "2.3.0",
     "react-resizable-panels": "2.1.7",
     "react-responsive-masonry": "2.7.1",
-    "react-router": "7.13.0",
     "react-slick": "0.31.0",
     "recharts": "2.15.2",
     "sonner": "2.0.3",
@@ -73,6 +70,7 @@
     "vaul": "1.1.2"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.0",
     "@tailwindcss/vite": "4.1.12",
     "@types/node": "^22.10.5",
     "@types/react": "^18.3.18",

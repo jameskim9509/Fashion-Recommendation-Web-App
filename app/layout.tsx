@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
+import "@/styles/index.css";
 
 export const metadata: Metadata = {
   title: "Fashion Recommendation",

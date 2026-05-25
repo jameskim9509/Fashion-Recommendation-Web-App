@@ -1,3 +1,5 @@
+"use client";
+
 import {
   useState,
   useEffect,
@@ -23,7 +25,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
-import { useNavigate } from "react-router";
+import { useRouter } from "next/navigation";
 import {
   fashionApi,
   FashionItem,
@@ -333,7 +335,7 @@ function FashionCard({ item }: { item: FashionItem }) {
 // 메인 대시보드
 // ─────────────────────────────────────────────────────────
 export default function Dashboard() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const [currentWeather, setCurrentWeather] =
     useState<CurrentWeather | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(true);
@@ -446,7 +448,7 @@ export default function Dashboard() {
           </div>
 
           <button
-            onClick={() => navigate('/admin')}
+            onClick={() => router.push('/admin')}
             className="flex items-center gap-2 px-4 py-2 bg-white rounded-xl shadow hover:shadow-lg transition-shadow border border-gray-200"
           >
             <Settings className="w-5 h-5" />
