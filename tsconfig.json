@@ -9,7 +9,6 @@
     ],
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
@@ -22,8 +21,7 @@
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "types": [
-      "node",
-      "vite/client"
+      "node"
     ],
     "plugins": [
       {
@@ -42,7 +40,6 @@
     "app",
     "next-env.d.ts",
     "src",
-    "vite.config.ts",
     ".next/types/**/*.ts"
   ],
   "exclude": [
