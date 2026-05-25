@@ -20,7 +20,8 @@ export interface CurrentWeather {
   feelsLike: number;
   humidity: number;
   location: string;
-  fetchedAt: Date;
+  /** Date on the client; ISO string after Server→Client serialization. */
+  fetchedAt: Date | string;
 }
 
 const OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast";
