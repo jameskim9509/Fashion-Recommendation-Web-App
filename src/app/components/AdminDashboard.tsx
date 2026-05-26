@@ -9,6 +9,7 @@ import {
   Trash2,
   Save,
   X,
+  LogOut,
 } from "lucide-react";
 import {
   fashionApi,
@@ -138,13 +139,27 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <button
-            onClick={handleCreate}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl shadow hover:bg-blue-700 transition-colors"
-          >
-            <Plus className="w-5 h-5" />
-            <span>새로 만들기</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleCreate}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl shadow hover:bg-blue-700 transition-colors"
+            >
+              <Plus className="w-5 h-5" />
+              <span>새로 만들기</span>
+            </button>
+            <button
+              onClick={async () => {
+                await fetch("/api/auth/logout", { method: "POST" });
+                router.replace("/admin/login");
+                router.refresh();
+              }}
+              className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl shadow-sm hover:bg-gray-50 transition-colors"
+              title="로그아웃"
+            >
+              <LogOut className="w-5 h-5" />
+              <span className="hidden sm:inline">로그아웃</span>
+            </button>
+          </div>
         </header>
 
         {editingItem && (

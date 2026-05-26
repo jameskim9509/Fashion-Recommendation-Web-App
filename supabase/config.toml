@@ -1,0 +1,32 @@
+# Supabase CLI 설정. https://supabase.com/docs/guides/cli/config
+# project_id 는 supabase link --project-ref <ref> 시 자동 채워지므로 placeholder.
+project_id = "fashion-recommendation-web-app"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[db.pooler]
+enabled = false
+port = 54329
+pool_mode = "transaction"
+
+[studio]
+enabled = true
+port = 54323
+
+[auth]
+# Supabase Auth 는 본 프로젝트에서 사용하지 않음 (자체 admins/sessions 테이블 사용).
+# 로컬 supabase start 환경에선 비활성화해도 무방.
+enabled = false
+
+[storage]
+enabled = false

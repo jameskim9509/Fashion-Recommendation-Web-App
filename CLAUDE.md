@@ -4,11 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
-- `npm i` — install dependencies (pnpm-workspace.yaml is also present; either works, repo declares itself as a single-package workspace).
+- `npm i` — install dependencies.
 - `npm run dev` — start the Next.js dev server.
 - `npm run build` — production build via `next build`.
 - `npm run start` — serve the production build via `next start`.
 - `npm run typecheck` — TypeScript strict-mode check via `tsc --noEmit` (uses [tsconfig.json](tsconfig.json)).
+- `supabase db push` — apply pending DB migrations to the linked Supabase project ([supabase/README.md](supabase/README.md)).
 
 No lint or test scripts are configured.
 
@@ -22,7 +23,12 @@ App Router lives in [app/](app/):
 - [app/admin/page.tsx](app/admin/page.tsx) → renders `<AdminDashboard />`
 - [app/layout.tsx](app/layout.tsx) is the root layout (imports `@/styles/index.css`)
 
-`Dashboard` and `AdminDashboard` are **Client Components** (`"use client"` at the top of [src/app/components/Dashboard.tsx](src/app/components/Dashboard.tsx) and [src/app/components/AdminDashboard.tsx](src/app/components/AdminDashboard.tsx)) and use `useRouter()` from `next/navigation` — no callback prop drilling. SSR of initial data is planned in a follow-up PR (`feat/nextjs-ssr-dashboard`).
+`Dashboard` and `AdminDashboard` are **Client Components** (`"use client"` at the top of [src/app/components/Dashboard.tsx](src/app/components/Dashboard.tsx) and [src/app/components/AdminDashboard.tsx](src/app/components/AdminDashboard.tsx)) and use `useRouter()` from `next/navigation` — no callback prop drilling. Dashboard receives initial weather + fashion data via SSR ([app/page.tsx](app/page.tsx) is an async Server Component).
+
+### Admin auth (stateful sessions in Supabase)
+`/admin/*` (except `/admin/login`) and `POST` / `DELETE` on `/api/fashion` are gated by [middleware.ts](middleware.ts), which validates an `admin_session` cookie against Supabase. `GET /api/fashion` is intentionally public so the home Dashboard works for anonymous visitors. Auth is **not** Supabase Auth — the app uses its own `admins` / `sessions` tables ([supabase/migrations/](supabase/migrations/)) and a small scrypt-based helper in [src/lib/server/auth.ts](src/lib/server/auth.ts). The login form lives at [app/admin/login/page.tsx](app/admin/login/page.tsx) and posts to [app/api/auth/login/route.ts](app/api/auth/login/route.ts); logout is the AdminDashboard header button calling [app/api/auth/logout/route.ts](app/api/auth/logout/route.ts). Sessions expire after 7 days; rotating `SUPABASE_SERVICE_ROLE_KEY` does **not** invalidate sessions — delete rows from `public.sessions` to do that. The Supabase service-role client at [src/lib/server/supabase.ts](src/lib/server/supabase.ts) imports `"server-only"` and must never appear in a Client Component import chain.
+
+Required env: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` ([.env.example](.env.example)). Setup workflow + test admin credentials are in [supabase/README.md](supabase/README.md).
 
 ### Data layer (Next.js Route Handler proxy → Google Apps Script + Sheets)
 Browser code calls **same-origin `/api/fashion`** ([app/api/fashion/route.ts](app/api/fashion/route.ts)), which proxies to the Apps Script `/exec` Web App. The Apps Script URL and token live **only on the server** as env vars:
