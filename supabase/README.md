@@ -1,7 +1,9 @@
 # Supabase migrations
 
-관리자 인증 (admins / sessions 테이블) 의 스키마를 버전 관리합니다.
-앱은 Supabase Auth 를 사용하지 않고 본 테이블 + 자체 비밀번호 해시 + 쿠키 세션을 사용합니다 ([src/lib/server/auth.ts](../src/lib/server/auth.ts) 참고).
+다음 두 가지 인증 도메인의 스키마를 버전 관리합니다. 둘 다 **Supabase Auth 를 사용하지 않고** 자체 테이블 + 쿠키 세션을 씁니다.
+
+- **관리자**: admins / sessions 테이블 + scrypt 비밀번호 해시 ([src/lib/server/auth.ts](../src/lib/server/auth.ts))
+- **일반 사용자**: users / user_sessions / user_favorites 테이블 + OAuth 2.0 (Google·Kakao) ([src/lib/server/user-auth.ts](../src/lib/server/user-auth.ts))
 
 ## 첫 셋업 (한 번만)
 
@@ -57,3 +59,25 @@ supabase db reset    # migrations + seed 재적용
 - password: `admin1234!`
 
 비밀번호 해시는 scrypt 사전 계산값 (재현 가능). 운영 배포 전 별도 마이그레이션으로 비번 교체 또는 행 삭제 후 새 관리자 등록 권장.
+
+## 사용자 OAuth 로그인 (Google · Kakao)
+
+[20260531000000_user_oauth.sql](migrations/20260531000000_user_oauth.sql) 가 `users` / `user_sessions` / `user_favorites` 테이블을 만듭니다. 적용은 위 "마이그레이션 적용" 과 동일하게 `supabase db push`.
+
+OAuth 제공자 콘솔에서 클라이언트를 발급하고 **redirect URI** 를 등록해야 합니다:
+
+- Google: `<origin>/api/auth/oauth/google/callback`
+- Kakao: `<origin>/api/auth/oauth/kakao/callback`
+
+`<origin>` 은 로컬 `http://localhost:3000`, 운영은 배포 도메인. 프록시로 origin 과 외부 URL 이 다르면 `OAUTH_REDIRECT_BASE_URL` 로 고정할 수 있습니다.
+
+발급한 값을 `.env.local` (운영은 Vercel 환경변수) 에 입력 ([.env.example](../.env.example) 참고):
+
+```ini
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+KAKAO_CLIENT_ID=...          # 카카오 "REST API 키"
+KAKAO_CLIENT_SECRET=         # [카카오 로그인 → 보안] 에서 사용함으로 켠 경우에만
+```
+
+제공자별 동의항목: Google 은 `openid email profile`, Kakao 는 `account_email,profile_nickname,profile_image` 를 요청합니다 (Kakao 는 콘솔의 동의항목 설정과 일치해야 함). 세션은 `user_session` 쿠키로 30일 유지되며, 무효화하려면 `public.user_sessions` 행을 삭제하면 됩니다.

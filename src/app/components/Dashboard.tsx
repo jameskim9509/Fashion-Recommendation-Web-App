@@ -25,6 +25,9 @@ import {
   Tag,
   ChevronDown,
   ChevronUp,
+  Heart,
+  LogIn,
+  LogOut,
   CalendarDays,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -38,6 +41,15 @@ import {
   type DailyForecast,
   type WeatherType,
 } from "../services/weatherApi";
+import {
+  type SessionUser,
+  getCurrentUser,
+  getFavoriteIds,
+  addFavorite as apiAddFavorite,
+  removeFavorite as apiRemoveFavorite,
+  logoutUser,
+  oauthLoginUrl,
+} from "../services/userApi";
 
 // ─────────────────────────────────────────────────────────
 // 타입
@@ -232,7 +244,15 @@ function getItemTempBand(item: FashionItem): TempBand | null {
 // ─────────────────────────────────────────────────────────
 // 패션 카드 컴포넌트
 // ─────────────────────────────────────────────────────────
-function FashionCard({ item }: { item: FashionItem }) {
+function FashionCard({
+  item,
+  isFavorite,
+  onToggleFavorite,
+}: {
+  item: FashionItem;
+  isFavorite: boolean;
+  onToggleFavorite: (id: string) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
 
   const itemTemperature = getItemTemperature(item);
@@ -259,29 +279,45 @@ function FashionCard({ item }: { item: FashionItem }) {
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden">
       {/* 카드 헤더 */}
       <div className="p-5 pb-3">
-        <div className="flex flex-wrap gap-1.5 mb-3">
-          {/* 카테고리 */}
-          <span
-            className={`px-2.5 py-0.5 rounded-full text-xs ${categoryColor[catKey] ?? "bg-gray-100 text-gray-600"}`}
-          >
-            {catKey}
-          </span>
-
-          {/* 기온 구간: temperature_band 컬럼이 아니라 숫자 기온으로 계산.
-              기온 정보가 전혀 없으면 "기온 무관" 뱃지로 표시한다. */}
-          {tempBand ? (
+        <div className="flex items-start justify-between gap-2 mb-3">
+          <div className="flex flex-wrap gap-1.5">
+            {/* 카테고리 */}
             <span
-              className={`px-2.5 py-0.5 rounded-full text-xs ${tempBandConfig[tempBand].color}`}
+              className={`px-2.5 py-0.5 rounded-full text-xs ${categoryColor[catKey] ?? "bg-gray-100 text-gray-600"}`}
             >
-              {itemTemperature !== null
-                ? `기준 ${itemTemperature}°C`
-                : ""}
+              {catKey}
             </span>
-          ) : (
-            <span className="px-2.5 py-0.5 rounded-full text-xs bg-gray-100 text-gray-500">
-              기온 무관
-            </span>
-          )}
+
+            {/* 기온 구간: temperature_band 컬럼이 아니라 숫자 기온으로 계산.
+                기온 정보가 전혀 없으면 "기온 무관" 뱃지로 표시한다. */}
+            {tempBand ? (
+              <span
+                className={`px-2.5 py-0.5 rounded-full text-xs ${tempBandConfig[tempBand].color}`}
+              >
+                {itemTemperature !== null
+                  ? `기준 ${itemTemperature}°C`
+                  : ""}
+              </span>
+            ) : (
+              <span className="px-2.5 py-0.5 rounded-full text-xs bg-gray-100 text-gray-500">
+                기온 무관
+              </span>
+            )}
+          </div>
+
+          {/* 찜(즐겨찾기). 비로그인 시 클릭하면 부모가 로그인 안내를 처리한다. */}
+          <button
+            type="button"
+            onClick={() => onToggleFavorite(item.id)}
+            aria-pressed={isFavorite}
+            aria-label={isFavorite ? "찜 해제" : "찜하기"}
+            title={isFavorite ? "찜 해제" : "찜하기"}
+            className="shrink-0 p-1.5 -mr-1 -mt-1 rounded-full text-gray-400 hover:bg-pink-50 hover:text-pink-500 transition-colors"
+          >
+            <Heart
+              className={`w-5 h-5 ${isFavorite ? "fill-pink-500 text-pink-500" : ""}`}
+            />
+          </button>
         </div>
 
         {/* 설명 */}
@@ -382,6 +418,11 @@ export default function Dashboard({
   );
   const [fashionLoading, setFashionLoading] = useState(false);
 
+  // ── 사용자 로그인(OAuth) + 즐겨찾기 ──
+  const [currentUser, setCurrentUser] = useState<SessionUser | null>(null);
+  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+
   // SSR seed 가 있으면 mount 시 첫 fashion fetch 를 한 번 건너뛴다 (중복 호출 방지).
   // 이후 geolocation 으로 weather 가 변경되면 정상적으로 다시 fetch 한다.
   const skipNextFashionLoad = useRef<boolean>(!!initialFashionItems);
@@ -417,6 +458,69 @@ export default function Dashboard({
   useEffect(() => {
     loadWeather();
   }, [loadWeather]);
+
+  // ── 로그인 사용자 + 즐겨찾기 로드 ──
+  const loadUserAndFavorites = useCallback(async () => {
+    const user = await getCurrentUser();
+    setCurrentUser(user);
+    if (user) {
+      const ids = await getFavoriteIds();
+      setFavoriteIds(new Set(ids));
+    } else {
+      setFavoriteIds(new Set());
+    }
+  }, []);
+
+  useEffect(() => {
+    loadUserAndFavorites();
+  }, [loadUserAndFavorites]);
+
+  // OAuth 콜백이 ?login=success|error 로 돌아오면 쿼리만 정리(주소창 깔끔하게).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("login")) {
+      params.delete("login");
+      const qs = params.toString();
+      router.replace(qs ? `/?${qs}` : "/");
+    }
+  }, [router]);
+
+  const handleLogout = useCallback(async () => {
+    await logoutUser();
+    setCurrentUser(null);
+    setFavoriteIds(new Set());
+    setUserMenuOpen(false);
+  }, []);
+
+  const handleToggleFavorite = useCallback(
+    async (id: string) => {
+      // 비로그인 시 찜 불가 → 로그인 메뉴를 열어 안내.
+      if (!currentUser) {
+        setUserMenuOpen(true);
+        return;
+      }
+      const isFav = favoriteIds.has(id);
+      // 낙관적 업데이트 후 실패 시 롤백.
+      setFavoriteIds((prev) => {
+        const next = new Set(prev);
+        if (isFav) next.delete(id);
+        else next.add(id);
+        return next;
+      });
+      const ok = isFav
+        ? await apiRemoveFavorite(id)
+        : await apiAddFavorite(id);
+      if (!ok) {
+        setFavoriteIds((prev) => {
+          const next = new Set(prev);
+          if (isFav) next.add(id);
+          else next.delete(id);
+          return next;
+        });
+      }
+    },
+    [currentUser, favoriteIds],
+  );
 
   // ── 날씨 변경 시 → API에서 weather 기준으로만 전체 리스트 조회 ──
   const loadFashionList = useCallback(
@@ -528,13 +632,108 @@ export default function Dashboard({
             </p>
           </div>
 
-          <button
-            onClick={() => router.push('/admin')}
-            className="flex items-center gap-2 px-4 py-2 bg-white rounded-xl shadow hover:shadow-lg transition-shadow border border-gray-200"
-          >
-            <Settings className="w-5 h-5" />
-            <span>관리자</span>
-          </button>
+          <div className="flex items-center gap-2">
+            {/* 로그인 / 프로필 드롭다운 */}
+            <div className="relative">
+              {currentUser ? (
+                <button
+                  onClick={() => setUserMenuOpen((v) => !v)}
+                  className="flex items-center gap-2 pl-2 pr-3 py-1.5 bg-white rounded-xl shadow hover:shadow-lg transition-shadow border border-gray-200"
+                >
+                  {currentUser.avatarUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={currentUser.avatarUrl}
+                      alt=""
+                      className="w-7 h-7 rounded-full object-cover"
+                    />
+                  ) : (
+                    <span className="w-7 h-7 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center text-sm">
+                      {(currentUser.name ?? currentUser.email ?? "U")
+                        .charAt(0)
+                        .toUpperCase()}
+                    </span>
+                  )}
+                  <span className="max-w-[8rem] truncate text-sm">
+                    {currentUser.name ?? currentUser.email ?? "사용자"}
+                  </span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => setUserMenuOpen((v) => !v)}
+                  className="flex items-center gap-2 px-4 py-2 bg-white rounded-xl shadow hover:shadow-lg transition-shadow border border-gray-200"
+                >
+                  <LogIn className="w-5 h-5" />
+                  <span>로그인</span>
+                </button>
+              )}
+
+              {userMenuOpen && (
+                <>
+                  {/* 바깥 클릭 시 닫기 */}
+                  <div
+                    className="fixed inset-0 z-10"
+                    onClick={() => setUserMenuOpen(false)}
+                  />
+                  <div className="absolute right-0 mt-2 w-60 bg-white rounded-xl shadow-xl border border-gray-100 z-20 overflow-hidden">
+                    {currentUser ? (
+                      <>
+                        <div className="px-4 py-3 border-b border-gray-100">
+                          <p className="text-sm text-gray-800 truncate">
+                            {currentUser.name ?? "사용자"}
+                          </p>
+                          {currentUser.email && (
+                            <p className="text-xs text-gray-400 truncate">
+                              {currentUser.email}
+                            </p>
+                          )}
+                        </div>
+                        <button
+                          onClick={handleLogout}
+                          className="flex items-center gap-2 w-full px-4 py-3 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+                        >
+                          <LogOut className="w-4 h-4" />
+                          로그아웃
+                        </button>
+                      </>
+                    ) : (
+                      <div className="p-2">
+                        <p className="px-2 py-1.5 text-xs text-gray-400">
+                          소셜 계정으로 로그인
+                        </p>
+                        <a
+                          href={oauthLoginUrl("google")}
+                          className="flex items-center gap-2 px-2 py-2 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                          <span className="w-5 h-5 flex items-center justify-center rounded-full bg-white border border-gray-200 text-[11px]">
+                            G
+                          </span>
+                          Google 계정으로 계속
+                        </a>
+                        <a
+                          href={oauthLoginUrl("kakao")}
+                          className="flex items-center gap-2 px-2 py-2 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                          <span className="w-5 h-5 flex items-center justify-center rounded-full bg-[#FEE500] text-[11px]">
+                            K
+                          </span>
+                          카카오 계정으로 계속
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <button
+              onClick={() => router.push('/admin')}
+              className="flex items-center gap-2 px-4 py-2 bg-white rounded-xl shadow hover:shadow-lg transition-shadow border border-gray-200"
+            >
+              <Settings className="w-5 h-5" />
+              <span>관리자</span>
+            </button>
+          </div>
         </header>
 
         {/* ── 날씨 + 성별 선택 ── */}
@@ -830,7 +1029,12 @@ export default function Dashboard({
           ) : filtered.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
               {filtered.map((item) => (
-                <FashionCard key={item.id} item={item} />
+                <FashionCard
+                  key={item.id}
+                  item={item}
+                  isFavorite={favoriteIds.has(item.id)}
+                  onToggleFavorite={handleToggleFavorite}
+                />
               ))}
             </div>
           ) : allFashionItems.length > 0 ? (
