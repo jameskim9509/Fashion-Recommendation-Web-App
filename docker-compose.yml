@@ -12,4 +12,11 @@ services:
     # MongoDB 만 있어도 홈 화면 데이터는 정상 렌더된다(관리자 기능은 Supabase env 필요).
     env_file:
       - .env
+    # standalone 컨테이너의 내부 origin 은 HOSTNAME(0.0.0.0):3000 이라, OAuth 시작/콜백이
+    # 만드는 redirect_uri 가 http://0.0.0.0:3000/... 으로 어긋난다(provider 의 redirect_uri_mismatch).
+    # 외부에서 실제 접속하는 URL 로 redirect_uri 를 고정한다(기본 http://localhost:3000).
+    # ※ WEB_PORT 를 바꾸면 OAUTH_REDIRECT_BASE_URL 도 그 포트로 맞추고, provider 콘솔의
+    #    Authorized redirect URI 에 <base>/api/auth/oauth/<google|kakao>/callback 을 등록해야 함.
+    environment:
+      OAUTH_REDIRECT_BASE_URL: ${OAUTH_REDIRECT_BASE_URL:-http://localhost:3000}
     restart: unless-stopped
