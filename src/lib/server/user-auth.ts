@@ -68,7 +68,8 @@ const PROVIDERS: Record<OAuthProvider, ProviderConfig> = {
     tokenUrl: "https://kauth.kakao.com/oauth/token",
     userInfoUrl: "https://kapi.kakao.com/v2/user/me",
     // Kakao 는 콘솔 동의항목과 일치해야 함. 콤마 구분.
-    scope: "account_email,profile_nickname,profile_image",
+    // account_email 은 비즈니스 앱 전환이 필요해 제외(미설정 시 KOE006). email 은 null 로 저장됨.
+    scope: "profile_nickname,profile_image",
     clientId: () => process.env.KAKAO_CLIENT_ID,
     clientSecret: () => process.env.KAKAO_CLIENT_SECRET,
     parseProfile: (raw) => {
