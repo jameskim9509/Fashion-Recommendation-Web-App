@@ -1,0 +1,15 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: fashion-recommendation-web
+    container_name: fashion-recommendation-web
+    # 호스트 포트는 WEB_PORT 로 변경 가능(기본 3000). 컨테이너 내부는 항상 3000.
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    # 비밀키(.env)는 이미지에 굽지 않고 런타임에만 주입한다.
+    # MongoDB 만 있어도 홈 화면 데이터는 정상 렌더된다(관리자 기능은 Supabase env 필요).
+    env_file:
+      - .env
+    restart: unless-stopped
