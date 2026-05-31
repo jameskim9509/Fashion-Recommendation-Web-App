@@ -44,3 +44,6 @@ Thumbs.db
 
 # Claude Code
 .claude/
+
+# Google Drive MCP OAuth 토큰 저장 디렉터리 (.mcp.json 의 GDRIVE_CREDS_DIR 기본값)
+.gdrive-creds/

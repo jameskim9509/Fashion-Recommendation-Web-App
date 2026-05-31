@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "gdrive": {
+      "command": "npx",
+      "args": ["-y", "@isaacphi/mcp-gdrive"],
+      "env": {
+        "CLIENT_ID": "${GDRIVE_CLIENT_ID}",
+        "CLIENT_SECRET": "${GDRIVE_CLIENT_SECRET}",
+        "GDRIVE_CREDS_DIR": "${GDRIVE_CREDS_DIR:-./.gdrive-creds}"
+      }
+    },
+    "mongodb": {
+      "command": "npx",
+      "args": ["-y", "mongodb-mcp-server"],
+      "env": {
+        "MDB_MCP_CONNECTION_STRING": "${MDB_MCP_CONNECTION_STRING}"
+      }
+    }
+  }
+}
