@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  OAuthError,
   USER_SESSION_COOKIE_NAME,
   USER_SESSION_TTL_SECONDS,
   createUserSession,
@@ -70,6 +71,9 @@ export async function GET(
     return res;
   } catch (err) {
     console.error("OAuth callback failed:", err);
-    return fail("exchange");
+    // OAuthError 면 구체 reason(token_invalid_client 등), 아니면 generic exchange.
+    const reason =
+      err instanceof OAuthError && err.reason ? err.reason : "exchange";
+    return fail(reason);
   }
 }

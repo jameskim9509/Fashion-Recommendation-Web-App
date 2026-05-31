@@ -20,6 +20,15 @@ import { USER_SESSION_TTL_SECONDS } from "./user-auth-edge";
 
 export type OAuthProvider = "google" | "kakao";
 
+/** 콜백에서 ?reason= 으로 노출할 짧은 진단 코드를 들고 다니는 에러. */
+export class OAuthError extends Error {
+  reason: string;
+  constructor(reason: string, message?: string) {
+    super(message ?? reason);
+    this.reason = reason;
+  }
+}
+
 export interface OAuthProfile {
   providerUserId: string;
   email: string | null;
@@ -154,21 +163,37 @@ export async function exchangeCodeForProfile(
   });
   if (!tokenRes.ok) {
     const detail = await tokenRes.text().catch(() => "");
-    throw new Error(`token exchange failed (${tokenRes.status}): ${detail}`);
+    // 제공자가 준 error 코드를 추출해 진단용 reason 으로 전달 (예: invalid_client).
+    let code = `http_${tokenRes.status}`;
+    try {
+      const j = JSON.parse(detail) as { error?: string };
+      if (j.error) code = j.error;
+    } catch {
+      /* JSON 아님 — http_status 유지 */
+    }
+    throw new OAuthError(
+      `token_${code}`,
+      `token exchange failed (${tokenRes.status}): ${detail}`,
+    );
   }
   const token = (await tokenRes.json()) as { access_token?: string };
-  if (!token.access_token) throw new Error("no access_token in token response");
+  if (!token.access_token) {
+    throw new OAuthError("no_access_token", "no access_token in token response");
+  }
 
   const infoRes = await fetch(cfg.userInfoUrl, {
     headers: { Authorization: `Bearer ${token.access_token}` },
   });
   if (!infoRes.ok) {
     const detail = await infoRes.text().catch(() => "");
-    throw new Error(`userinfo fetch failed (${infoRes.status}): ${detail}`);
+    throw new OAuthError(
+      "userinfo",
+      `userinfo fetch failed (${infoRes.status}): ${detail}`,
+    );
   }
   const profile = cfg.parseProfile(await infoRes.json());
   if (!profile.providerUserId) {
-    throw new Error("could not resolve provider user id");
+    throw new OAuthError("no_provider_user_id", "could not resolve provider user id");
   }
   return profile;
 }
@@ -196,7 +221,10 @@ export async function upsertUserFromOAuth(
     .select("id")
     .single();
   if (error || !data) {
-    throw new Error(`Failed to upsert user: ${error?.message ?? "unknown"}`);
+    throw new OAuthError(
+      "db_upsert_user",
+      `Failed to upsert user: ${error?.message ?? "unknown"}`,
+    );
   }
   return data.id;
 }
@@ -213,7 +241,8 @@ export async function createUserSession(userId: string): Promise<{
     .select("id")
     .single();
   if (error || !data) {
-    throw new Error(
+    throw new OAuthError(
+      "db_session",
       `Failed to create user session: ${error?.message ?? "unknown"}`,
     );
   }
