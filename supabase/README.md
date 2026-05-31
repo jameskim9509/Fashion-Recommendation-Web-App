@@ -80,4 +80,4 @@ KAKAO_CLIENT_ID=...          # 카카오 "REST API 키"
 KAKAO_CLIENT_SECRET=         # [카카오 로그인 → 보안] 에서 사용함으로 켠 경우에만
 ```
 
-제공자별 동의항목: Google 은 `openid email profile`, Kakao 는 `account_email,profile_nickname,profile_image` 를 요청합니다 (Kakao 는 콘솔의 동의항목 설정과 일치해야 함). 세션은 `user_session` 쿠키로 30일 유지되며, 무효화하려면 `public.user_sessions` 행을 삭제하면 됩니다.
+제공자별 동의항목: Google 은 `openid email profile`, Kakao 는 `profile_nickname,profile_image` 를 요청합니다 (Kakao 는 콘솔의 동의항목 설정과 일치해야 함 — 요청하는 항목이 콘솔에서 활성화돼 있지 않으면 `KOE006` 오류). Kakao 의 `account_email` 은 비즈니스 앱 전환이 필요해 기본 scope 에서 제외했고, 이 경우 사용자 `email` 은 `null` 로 저장됩니다(테이블상 nullable). 세션은 `user_session` 쿠키로 30일 유지되며, 무효화하려면 `public.user_sessions` 행을 삭제하면 됩니다.
