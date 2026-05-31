@@ -23,27 +23,30 @@ export async function GET(
 ) {
   const { provider } = await ctx.params;
   const home = new URL("/", req.url);
-  const fail = () => {
+  // reason: 실패 지점을 표시(진단용). 민감정보는 담지 않는다.
+  const fail = (reason: string) => {
     home.searchParams.set("login", "error");
+    home.searchParams.set("reason", reason);
     const res = NextResponse.redirect(home);
     res.cookies.set({ name: OAUTH_STATE_COOKIE, value: "", path: "/", maxAge: 0 });
     return res;
   };
 
-  if (!isOAuthProvider(provider)) return fail();
+  if (!isOAuthProvider(provider)) return fail("bad_provider");
 
   const url = req.nextUrl;
   // 사용자가 동의를 거부하면 provider 가 error 쿼리로 돌려보냄.
-  if (url.searchParams.get("error")) return fail();
+  const providerError = url.searchParams.get("error");
+  if (providerError) return fail(`provider_${providerError}`);
 
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   const cookieState = req.cookies.get(OAUTH_STATE_COOKIE)?.value;
 
   // state 누락/불일치 → CSRF 의심. 차단.
-  if (!code || !state || !cookieState || state !== cookieState) {
-    return fail();
-  }
+  if (!code || !state) return fail("missing_code_or_state");
+  if (!cookieState) return fail("no_state_cookie");
+  if (state !== cookieState) return fail("state_mismatch");
 
   try {
     const redirectUri = computeRedirectUri(url.origin, provider);
@@ -67,6 +70,6 @@ export async function GET(
     return res;
   } catch (err) {
     console.error("OAuth callback failed:", err);
-    return fail();
+    return fail("exchange");
   }
 }
