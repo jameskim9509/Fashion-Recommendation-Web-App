@@ -30,13 +30,15 @@ App Router lives in [app/](app/):
 
 Required env: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` ([.env.example](.env.example)). Setup workflow + test admin credentials are in [supabase/README.md](supabase/README.md).
 
-### Data layer (Next.js Route Handler proxy → Google Apps Script + Sheets)
-Browser code calls **same-origin `/api/fashion`** ([app/api/fashion/route.ts](app/api/fashion/route.ts)), which proxies to the Apps Script `/exec` Web App. The Apps Script URL and token live **only on the server** as env vars:
+### Data layer (Next.js Route Handler → MongoDB Atlas)
+Browser code calls **same-origin `/api/fashion`** ([app/api/fashion/route.ts](app/api/fashion/route.ts)), which reads/writes **MongoDB Atlas** directly via [src/lib/server/fashionRepo.ts](src/lib/server/fashionRepo.ts). The connection is a cached `MongoClient` in [src/lib/server/mongodb.ts](src/lib/server/mongodb.ts) (global promise so Vercel/serverless lambdas reuse it); both import `"server-only"` and must never appear in a Client Component import chain. Data lives in the **`fashion_items`** collection of the **`fashion`** DB; each document is a `FashionItem` keyed by a string `id` (unique index), with `_id` projected out on read.
 
-- `APPS_SCRIPT_URL` — Apps Script Web App `/exec` URL
-- `APPS_SCRIPT_TOKEN` — token expected by Apps Script `setApiToken()` (used to authenticate writes)
+- `MONGODB_URI` — Atlas connection string (contains the password)
+- `MONGODB_DB` — DB name (optional, default `fashion`)
 
-See [.env.example](.env.example) for the local-dev template; copy to `.env.local` (gitignored). On Vercel, set the same vars in Project Settings. **Never** put either value in client code or prefix them with `NEXT_PUBLIC_` — the token would leak to the browser bundle.
+See [.env.example](.env.example) for the local-dev template; copy to `.env.local` (gitignored). On Vercel, set the same vars in Project Settings. **Never** put `MONGODB_URI` in client code or prefix it with `NEXT_PUBLIC_` — the credentials would leak to the browser bundle.
+
+> The data was migrated from a Google Sheet (`fashion_data`) via [scripts/migrate-sheet-to-mongo.mjs](scripts/migrate-sheet-to-mongo.mjs). The legacy Apps Script + Sheets stack (and its `APPS_SCRIPT_*` env, [openapi.yaml](openapi.yaml), `API_SETUP.md`) is no longer used at runtime.
 
 The client wrapper [src/app/services/fashionApi.ts](src/app/services/fashionApi.ts) only knows about `/api/fashion`:
 - `GET /api/fashion?weather=<w>` → list filtered by weather
@@ -44,11 +46,7 @@ The client wrapper [src/app/services/fashionApi.ts](src/app/services/fashionApi.
 - `POST /api/fashion` (body = `Partial<FashionItem>`) → upsert
 - `DELETE /api/fashion?id=<id>` → delete
 
-The authoritative **upstream** API contract — every Apps Script `action`, request/response schema, and the `NullableNumberLike`/`BooleanLike` quirks of Sheet-backed values — lives in [openapi.yaml](openapi.yaml) (OpenAPI 3.1). If the Route Handler and `openapi.yaml` disagree about the upstream call shape, fix whichever side is behind; do not silently diverge. `temperature_band` is intentionally absent from the spec — it is no longer stored/validated server-side, and the client computes bands from `temperature_*_c` (see filter pipeline below).
-
-The Apps Script call has two non-negotiable quirks (in the Route Handler, **not** the client):
-1. POST `Content-Type` must be `text/plain;charset=UTF-8`. `application/json` triggers a CORS preflight that Apps Script can't handle. Body is still a JSON string; Apps Script does `JSON.parse(e.postData.contents)`.
-2. All fetches use `redirect: "follow"` because `/exec` always 302s to `googleusercontent.com`.
+`serverListFashion` filters by `weather` only (server-side); `serverUpsertFashion` upserts by `id` (generating `LOOK_<uuid>` when absent) and stamps `updated_at`; `serverDeleteFashion` removes by `id`. All three return the same `ApiResponse<T>` shape the client expects. `temperature_band` is **not** stored — the client computes bands from `temperature_*_c` (see filter pipeline below).
 
 ### Filter pipeline (non-obvious)
 [src/app/components/Dashboard.tsx](src/app/components/Dashboard.tsx) deliberately splits filtering between server and client:
@@ -68,10 +66,10 @@ If you change band thresholds, update both `getTempBand` and `tempBandConfig` (d
 ### Path alias
 `@/*` → `./src/*` (in [tsconfig.json](tsconfig.json)). Note this does NOT cover the root `app/` directory — import from `app/` using relative paths or full route paths.
 
-## Required sheet field values
-When working with fashion items, these fields have constrained vocabularies (enforced by `FashionItem` type, the OpenAPI `enum`s, and used as filter keys):
+## Required field values
+When working with fashion items, these fields have constrained vocabularies (enforced by the `FashionItem` type and used as filter keys):
 - `weather`: `sunny | cloudy | rainy | snowy | windy | foggy`
 - `gender`: `male | female | unisex`
 - `fashion_category`: `casual | street | minimal | formal | sporty | business | date | travel`
 
-`temperature_band` is **not** persisted server-side (the Apps Script strips it on input per [openapi.yaml](openapi.yaml) `FashionItemInput`); the client-side `TempBand` is derived from `temperature_*_c`. `active: false` items are excluded after fetch.
+`temperature_band` is **not** persisted (the migration drops it); the client-side `TempBand` is derived from `temperature_*_c`. `active: false` items are excluded after fetch.
