@@ -19,7 +19,7 @@ sequenceDiagram
     participant DB as Supabase<br/>(service-role)
 
     U->>A: GET /api/auth/oauth/{provider}<br/>(헤더 드롭다운의 "계정으로 계속" 링크)
-    Note over A: state = crypto.randomUUID()<br/>redirect_uri = origin + /callback
+    Note over A: state = crypto.randomUUID()<br/>redirect_uri = origin + /api/auth/oauth/{provider}/callback
     A-->>U: 302 → 제공자 authorize URL<br/>Set-Cookie: oauth_state (httpOnly, 10분)
 
     U->>P: authorize 요청 (client_id, redirect_uri, scope, state)
@@ -27,7 +27,7 @@ sequenceDiagram
     U->>P: 동의
     P-->>U: 302 → /api/auth/oauth/{provider}/callback?code&state
 
-    U->>A: GET /callback?code&state (oauth_state 쿠키 동봉)
+    U->>A: GET /api/auth/oauth/{provider}/callback?code&state<br/>(oauth_state 쿠키 동봉)
     Note over A: state ≟ 쿠키 검증 (CSRF 방지)<br/>불일치/누락 시 즉시 차단
     A->>P: POST token (code → access_token)
     P-->>A: access_token
