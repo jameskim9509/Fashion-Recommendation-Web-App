@@ -29,7 +29,7 @@ sequenceDiagram
 
     U->>A: GET /api/auth/oauth/{provider}/callback?code&state<br/>(oauth_state 쿠키 동봉)
     Note over A: state ≟ 쿠키 검증 (CSRF 방지)<br/>불일치/누락 시 즉시 차단
-    A->>P: POST token (code → access_token)
+    A->>P: POST token<br/>(grant_type=authorization_code, code,<br/>client_id [+ client_secret], redirect_uri)<br/>→ access_token
     P-->>A: access_token
     A->>P: GET userinfo (Bearer access_token)
     P-->>A: 프로필 (id, email, name, avatar)
