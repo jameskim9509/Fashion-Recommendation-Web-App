@@ -1,6 +1,6 @@
 import Dashboard from "@/app/components/Dashboard";
 import { fetchWeatherBundle } from "@/app/services/weatherApi";
-import { serverListFashion } from "@/lib/server/appsScript";
+import { serverListFashion } from "@/lib/server/fashionRepo";
 
 // 매 요청마다 서버에서 새로 렌더 (날씨/패션 데이터를 캐싱하지 않음).
 export const dynamic = "force-dynamic";

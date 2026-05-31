@@ -3,7 +3,7 @@ import {
   serverDeleteFashion,
   serverListFashion,
   serverUpsertFashion,
-} from "@/lib/server/appsScript";
+} from "@/lib/server/fashionRepo";
 
 export const dynamic = "force-dynamic";
 
