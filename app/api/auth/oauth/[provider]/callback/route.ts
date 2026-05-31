@@ -7,7 +7,11 @@ import {
   isOAuthProvider,
   upsertUserFromOAuth,
 } from "@/lib/server/user-auth";
-import { OAUTH_STATE_COOKIE, computeRedirectUri } from "@/lib/server/oauth-http";
+import {
+  OAUTH_STATE_COOKIE,
+  computeRedirectUri,
+  resolveAppOrigin,
+} from "@/lib/server/oauth-http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,7 +26,8 @@ export async function GET(
   ctx: { params: Promise<{ provider: string }> },
 ) {
   const { provider } = await ctx.params;
-  const home = new URL("/", req.url);
+  // 컨테이너/프록시에서 req origin 이 0.0.0.0 등으로 잡혀도, 외부 접속 URL 로 홈 리다이렉트.
+  const home = new URL("/", resolveAppOrigin(req.nextUrl.origin));
   // reason: 실패 지점을 표시(진단용). 민감정보는 담지 않는다.
   const fail = (reason: string) => {
     home.searchParams.set("login", "error");
