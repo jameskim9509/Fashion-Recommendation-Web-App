@@ -28,6 +28,7 @@ import {
   Heart,
   LogIn,
   LogOut,
+  CalendarDays,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
@@ -35,8 +36,9 @@ import {
   FashionItem,
 } from "../services/fashionApi";
 import {
-  fetchCurrentWeather,
+  fetchWeatherBundle,
   type CurrentWeather,
+  type DailyForecast,
   type WeatherType,
 } from "../services/weatherApi";
 import {
@@ -170,6 +172,24 @@ const categoryColor: Record<string, string> = {
   date: "bg-rose-100 text-rose-700",
   travel: "bg-teal-100 text-teal-700",
 };
+
+// ─────────────────────────────────────────────────────────
+// 예보 날짜 → 요일 라벨
+// ─────────────────────────────────────────────────────────
+const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
+
+function dayLabel(dateStr: string, index: number): string {
+  if (index === 0) return "오늘";
+  if (index === 1) return "내일";
+  // "YYYY-MM-DD" 를 로컬 자정으로 파싱 (UTC 파싱 시 하루 밀릴 수 있음).
+  const d = new Date(`${dateStr}T00:00:00`);
+  return `${WEEKDAYS[d.getDay()]}요일`;
+}
+
+function dayDateLabel(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00`);
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
 
 // ─────────────────────────────────────────────────────────
 // 온도 → 기온 구간
@@ -373,16 +393,23 @@ function FashionCard({
 // ─────────────────────────────────────────────────────────
 interface DashboardProps {
   initialWeather?: CurrentWeather;
+  initialForecast?: DailyForecast[];
   initialFashionItems?: FashionItem[];
 }
 
 export default function Dashboard({
   initialWeather,
+  initialForecast,
   initialFashionItems,
 }: DashboardProps = {}) {
   const router = useRouter();
   const [currentWeather, setCurrentWeather] =
     useState<CurrentWeather | null>(initialWeather ?? null);
+  const [forecast, setForecast] = useState<DailyForecast[]>(
+    initialForecast ?? [],
+  );
+  // 추천 기준 날짜: 0 = 오늘(실시간 현재 날씨), 1+ = 예보 일자.
+  const [selectedDayIndex, setSelectedDayIndex] = useState(0);
   const [weatherLoading, setWeatherLoading] = useState(!initialWeather);
   const [selectedGender, setSelectedGender] =
     useState<GenderType>("female");
@@ -415,11 +442,14 @@ export default function Dashboard({
     setWeatherLoading(true);
 
     try {
-      const w = await fetchCurrentWeather();
-      setCurrentWeather(w);
+      const { current, forecast: nextForecast } =
+        await fetchWeatherBundle();
+      setCurrentWeather(current);
+      setForecast(nextForecast);
     } catch (error) {
       console.error("Failed to load weather:", error);
       setCurrentWeather(null);
+      setForecast([]);
     } finally {
       setWeatherLoading(false);
     }
@@ -510,25 +540,50 @@ export default function Dashboard({
     [],
   );
 
+  // ── 추천 기준 날씨: 오늘이면 실시간 현재 날씨, 그 외엔 선택한 예보 일자 ──
+  const activeWeather = useMemo<{
+    weather: WeatherType;
+    temperature: number;
+  } | null>(() => {
+    if (selectedDayIndex === 0) {
+      return currentWeather
+        ? {
+            weather: currentWeather.weather,
+            temperature: currentWeather.temperature,
+          }
+        : null;
+    }
+
+    const day = forecast[selectedDayIndex];
+    return day
+      ? { weather: day.weather, temperature: day.tempAvg }
+      : null;
+  }, [currentWeather, forecast, selectedDayIndex]);
+
+  // 예보가 새로 로드돼 선택 인덱스가 범위를 벗어나면 오늘로 되돌린다.
+  useEffect(() => {
+    if (selectedDayIndex > 0 && selectedDayIndex >= forecast.length) {
+      setSelectedDayIndex(0);
+    }
+  }, [forecast.length, selectedDayIndex]);
+
   useEffect(() => {
     if (skipNextFashionLoad.current) {
       skipNextFashionLoad.current = false;
       return;
     }
-    if (currentWeather) {
-      loadFashionList(currentWeather.weather);
+    if (activeWeather) {
+      loadFashionList(activeWeather.weather);
     }
-  }, [currentWeather?.weather, loadFashionList]);
+  }, [activeWeather?.weather, loadFashionList]);
 
-  // ── 프론트엔드 필터링: item 숫자 기온 → band 계산 + currentWeather band 비교 + gender ──
+  // ── 프론트엔드 필터링: item 숫자 기온 → band 계산 + 기준 날씨 band 비교 + gender ──
   const filtered = useMemo(() => {
-    if (!currentWeather) {
+    if (!activeWeather) {
       return [];
     }
 
-    const currentWeatherBand = getTempBand(
-      currentWeather.temperature,
-    );
+    const activeWeatherBand = getTempBand(activeWeather.temperature);
 
     return allFashionItems.filter((item) => {
       const itemBand = getItemTempBand(item);
@@ -536,18 +591,27 @@ export default function Dashboard({
       // 기온 정보가 없는 아이템은 band 매칭을 건너뛰고 통과시킨다
       // (이전에는 silently drop 되었음). 카드에서는 "기온 무관" 뱃지로 표시한다.
       const bandMatch =
-        itemBand === null || itemBand === currentWeatherBand;
+        itemBand === null || itemBand === activeWeatherBand;
       const genderMatch = item.gender === selectedGender;
 
       return bandMatch && genderMatch;
     });
-  }, [allFashionItems, currentWeather, selectedGender]);
+  }, [allFashionItems, activeWeather, selectedGender]);
 
+  // 상단 현재 날씨 카드용 (항상 실시간 현재 날씨 기준).
   const wConf = currentWeather
     ? weatherConfig[currentWeather.weather]
     : null;
   const tempBand = currentWeather
     ? getTempBand(currentWeather.temperature)
+    : "mild";
+
+  // 추천 섹션용 (선택한 날 기준).
+  const activeConf = activeWeather
+    ? weatherConfig[activeWeather.weather]
+    : null;
+  const activeBand = activeWeather
+    ? getTempBand(activeWeather.temperature)
     : "mild";
   const fetchedTime = currentWeather
     ? new Date(currentWeather.fetchedAt).toLocaleTimeString("ko-KR", {
@@ -848,6 +912,62 @@ export default function Dashboard({
           </div>
         </div>
 
+        {/* ── 주간 예보 (추천 기준 일자 선택) ── */}
+        {forecast.length > 0 && (
+          <div className="bg-white rounded-3xl shadow-xl p-6 md:p-8 mb-8">
+            <div className="flex items-center gap-2 mb-4">
+              <CalendarDays className="w-5 h-5 text-purple-600" />
+              <h2>주간 예보</h2>
+              <span className="text-gray-400 text-sm">
+                날짜를 선택하면 그 날 날씨에 맞춰 추천이 바뀝니다
+              </span>
+            </div>
+
+            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-7 gap-3">
+              {forecast.map((day, i) => {
+                const conf = weatherConfig[day.weather];
+                const DayIcon = conf.icon;
+                const isSel = selectedDayIndex === i;
+
+                return (
+                  <button
+                    key={day.date}
+                    onClick={() => setSelectedDayIndex(i)}
+                    className={`flex flex-col items-center gap-2 p-3 rounded-2xl border-2 transition-all ${
+                      isSel
+                        ? "bg-gradient-to-br from-purple-100 to-pink-100 border-purple-300 shadow-lg scale-[1.03]"
+                        : "bg-white hover:bg-gray-50 border-gray-200"
+                    }`}
+                  >
+                    <span
+                      className={`text-sm ${isSel ? "text-purple-700" : "text-gray-700"}`}
+                    >
+                      {dayLabel(day.date, i)}
+                    </span>
+                    <span className="text-xs text-gray-400">
+                      {dayDateLabel(day.date)}
+                    </span>
+                    <div
+                      className={`p-2 rounded-xl bg-gradient-to-br ${conf.gradient}`}
+                    >
+                      <DayIcon className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="text-xs">
+                      <span className="text-red-500">
+                        {day.tempMax}°
+                      </span>
+                      <span className="text-gray-300"> / </span>
+                      <span className="text-blue-500">
+                        {day.tempMin}°
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* ── 추천 스타일 리스트 ── */}
         <div className="bg-white rounded-3xl shadow-xl p-6 md:p-8">
           <div className="flex items-center justify-between mb-2">
@@ -863,21 +983,32 @@ export default function Dashboard({
             )}
           </div>
 
-          {/* 현재 필터 정보 */}
-          {currentWeather && !fashionLoading && (
+          {/* 현재 필터 정보 (선택한 날 기준) */}
+          {activeWeather && !fashionLoading && (
             <div className="flex flex-wrap gap-2 mb-6">
+              {forecast[selectedDayIndex] && (
+                <span className="flex items-center gap-1 px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs">
+                  <CalendarDays className="w-3.5 h-3.5" />
+                  {dayLabel(
+                    forecast[selectedDayIndex].date,
+                    selectedDayIndex,
+                  )}{" "}
+                  ({dayDateLabel(forecast[selectedDayIndex].date)}) 기준
+                </span>
+              )}
+
               <span className="flex items-center gap-1 px-3 py-1 bg-gray-100 rounded-full text-xs text-gray-600">
-                {wConf && (
-                  <wConf.icon className="w-3.5 h-3.5" />
+                {activeConf && (
+                  <activeConf.icon className="w-3.5 h-3.5" />
                 )}
-                날씨: {wConf?.label}
+                날씨: {activeConf?.label}
               </span>
 
               <span
-                className={`px-3 py-1 rounded-full text-xs ${tempBandConfig[tempBand].color}`}
+                className={`px-3 py-1 rounded-full text-xs ${tempBandConfig[activeBand].color}`}
               >
-                현재 기온 구간: {tempBandConfig[tempBand].label}{" "}
-                ({tempBandConfig[tempBand].range})
+                기온 구간: {tempBandConfig[activeBand].label}{" "}
+                ({tempBandConfig[activeBand].range})
               </span>
 
               <span
@@ -916,7 +1047,7 @@ export default function Dashboard({
               <p className="text-sm text-gray-400">
                 조회된 {allFashionItems.length}개 중{" "}
                 <strong>
-                  {tempBandConfig[tempBand].label}
+                  {tempBandConfig[activeBand].label}
                 </strong>{" "}
                 /&nbsp;
                 <strong>
